@@ -3,7 +3,11 @@ import csv
 from yoctopuce.yocto_api import *
 from yoctopuce.yocto_temperature import *
 from yoctopuce.yocto_datalogger import *
+
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+
 import matplotlib.dates as mdates
 from datetime import datetime
 
@@ -59,7 +63,7 @@ def save_datalogger_data(sensor):
 
 def poll_and_plot_temps():
     """
-    Poll all temperature sensors every second, plot on one graph.
+    Poll all temperature sensors every minute, plot on one graph.
     Save the plot every hour and once at exit.
     """
     print("\nPolling and plotting all sensors every second. Press Ctrl+C to stop.")
@@ -81,71 +85,74 @@ def poll_and_plot_temps():
     sensor_data = {}
 
     try:
-        while True:
-            current_time = datetime.now()
-            temps_text = []
+        with open("temps.csv", mode='a', newline='') as csv_file:
+            while True:
+                current_time = datetime.now()
+                temps_text = []
 
-            temp_sensor = YTemperature.FirstTemperature()
-            while temp_sensor:
-                serial = temp_sensor.get_module().get_serialNumber()
-                func_id = temp_sensor.get_functionId()
-                logical_name = temp_sensor.get_logicalName()
-                name = logical_name if logical_name else func_id
-                temp_value = temp_sensor.get_currentValue()
-                unit = temp_sensor.get_unit()
+                temp_sensor = YTemperature.FirstTemperature()
+                while temp_sensor:
+                    serial = temp_sensor.get_module().get_serialNumber()
+                    func_id = temp_sensor.get_functionId()
+                    logical_name = temp_sensor.get_logicalName()
+                    name = logical_name if logical_name else func_id
+                    temp_value = temp_sensor.get_currentValue()
+                    unit = temp_sensor.get_unit()
 
-                temps_text.append(f"{name}:{temp_value:.1f}{unit}")
+                    temps_text.append(f"{name}:{temp_value:.1f}{unit}")
 
-                if name not in sensor_data:
-                    line, = ax.plot([], [], label=name)
-                    sensor_data[name] = {
-                        'times': [],
-                        'temps': [],
-                        'line': line
-                    }
+                    # Append to csv file
+                    csv_writer = csv.writer(csv_file)
+                    csv_writer.writerow([current_time, name, temp_value])
+                    csv_file.flush()
 
-                data = sensor_data[name]
-                data['times'].append(current_time)
-                data['temps'].append(temp_value)
+                    if name not in sensor_data:
+                        line, = ax.plot([], [], label=name)
+                        sensor_data[name] = {
+                            'times': [],
+                            'temps': [],
+                            'line': line
+                        }
 
-                if len(data['times']) > 3600:  # up to an hour of 1Hz readings
-                    data['times'].pop(0)
-                    data['temps'].pop(0)
+                    data = sensor_data[name]
+                    data['times'].append(current_time)
+                    data['temps'].append(temp_value)
 
-                temp_sensor = temp_sensor.nextTemperature()
+                    if len(data['times']) > 3600:  # up to an hour
+                        data['times'].pop(0)
+                        data['temps'].pop(0)
 
-            for data in sensor_data.values():
-                data['line'].set_data(data['times'], data['temps'])
+                    temp_sensor = temp_sensor.nextTemperature()
 
-            ax.relim()
-            ax.autoscale_view()
-            ax.legend(loc='upper left')
-            fig.autofmt_xdate()
-            plt.tight_layout()  # Prevent clipping of labels/legend
-            plt.draw()
-            plt.pause(0.01)
+                for data in sensor_data.values():
+                    data['line'].set_data(data['times'], data['temps'])
 
-            # Print temps
-            print("\r" + " | ".join(temps_text), end="", flush=True)
+                ax.relim()
+                ax.autoscale_view()
+                ax.legend(loc='upper left')
+                fig.autofmt_xdate()
+                plt.tight_layout()  # Prevent clipping of labels/legend
+                plt.draw()
+                plt.pause(0.01)
 
-            # Check if an hour has passed
-            now = time.time()
-            if now - last_save_time >= 3600:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"all_sensors_{timestamp}.png"
-                print(f"\nAuto-saving plot: {filename}")
-                fig.tight_layout()
-                fig.savefig(filename)
-                last_save_time = now
+                # Check if an hour has passed
+                now = time.time()
+                if now - last_save_time >= 3600:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"all_sensors_{timestamp}.png"
+                    print(f"\nAuto-saving plot: {filename}")
+                    fig.tight_layout()
+                    fig.savefig(filename)
+                    last_save_time = now
 
-            time.sleep(1)
+                time.sleep(60)
 
     except KeyboardInterrupt:
         print("\nStopping and saving final plot...")
         plt.ioff()
         fig.autofmt_xdate()
         fig.tight_layout()
-        final_filename = "all_sensors_final.png"
+        final_filename = "all_sensors_final_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".png"
         fig.savefig(final_filename)
         print(f"Saved final plot: {final_filename}")
         plt.show()
