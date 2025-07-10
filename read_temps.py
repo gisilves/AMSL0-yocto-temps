@@ -11,6 +11,11 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
 
+import os
+
+os.makedirs("data", exist_ok=True)
+os.makedirs("plots", exist_ok=True)
+
 def connect_to_yocto():
     """
     Connect to Yoctopuce devices
@@ -32,7 +37,7 @@ def save_datalogger_data(sensor):
         logical_name = sensor.get_logicalName()
         serial = sensor.get_module().get_serialNumber()
         func_id = sensor.get_functionId()
-        filename = f"{logical_name or serial}_{func_id}_data.csv"
+        filename = f"data/{logical_name or serial}_{func_id}_data.csv"
         
         print(f"\t\tData logger is recording, saving data to {filename}")
         
@@ -85,7 +90,7 @@ def poll_and_plot_temps():
     sensor_data = {}
 
     try:
-        with open("temps.csv", mode='a', newline='') as csv_file:
+        with open("data/temps.csv", mode='a', newline='') as csv_file:
             while True:
                 current_time = datetime.now()
                 temps_text = []
@@ -105,7 +110,7 @@ def poll_and_plot_temps():
                     csv_writer = csv.writer(csv_file)
                     csv_writer.writerow([current_time, name, temp_value])
                     csv_file.flush()
-
+                    
                     if name not in sensor_data:
                         line, = ax.plot([], [], label=name)
                         sensor_data[name] = {
@@ -118,7 +123,7 @@ def poll_and_plot_temps():
                     data['times'].append(current_time)
                     data['temps'].append(temp_value)
 
-                    if len(data['times']) > 3600:  # up to an hour
+                    if len(data['times']) > 60:  # up to an hour
                         data['times'].pop(0)
                         data['temps'].pop(0)
 
@@ -139,20 +144,21 @@ def poll_and_plot_temps():
                 now = time.time()
                 if now - last_save_time >= 3600:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"all_sensors_{timestamp}.png"
+                    filename = f"plots/all_sensors_{timestamp}.png"
                     print(f"\nAuto-saving plot: {filename}")
                     fig.tight_layout()
                     fig.savefig(filename)
                     last_save_time = now
 
-                time.sleep(60)
+                for _ in range(60):
+                    plt.pause(1)  # pause for 1 second, allowing GUI events to process
 
     except KeyboardInterrupt:
         print("\nStopping and saving final plot...")
         plt.ioff()
         fig.autofmt_xdate()
         fig.tight_layout()
-        final_filename = "all_sensors_final_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".png"
+        final_filename = "plots/all_sensors_final_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".png"
         fig.savefig(final_filename)
         print(f"Saved final plot: {final_filename}")
         plt.show()
