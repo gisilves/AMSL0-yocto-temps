@@ -47,7 +47,7 @@ def save_datalogger_data(sensor):
             
             for data_set in dataLogger.get_dataSets():
                 try:
-                    if data_set.loadMore():
+                    while data_set.loadMore() < 100:
                         measures = data_set.get_measures()
                         for m in measures:
                             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(m.get_startTimeUTC()))
@@ -71,7 +71,7 @@ def poll_and_plot_temps():
     Poll all temperature sensors every minute, plot on one graph.
     Save the plot every hour and once at exit.
     """
-    print("\nPolling and plotting all sensors every second. Press Ctrl+C to stop.")
+    print("\nPolling and plotting all sensors every minute. Press Ctrl+C to stop.")
 
     # Start time
     start_time = time.time()

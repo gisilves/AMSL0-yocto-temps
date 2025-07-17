@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -6,15 +8,31 @@ import argparse
 import os
 
 def main(args):
-    # Read data
     filename = args.filename
-    df = pd.read_csv(filename, names=['time', 'name', 'temp'])
+
+    # Read data
+    try:
+        df = pd.read_csv(filename, names=['time', 'name', 'temp'])
+    except FileNotFoundError:
+        print(f"File not found: {filename}")
+        return
 
     # Convert time column to datetime
-    df['time'] = pd.to_datetime(df['time'], format='%Y-%m-%d %H:%M:%S.%f')
+    df['time'] = pd.to_datetime(df['time'], format='%Y-%m-%d %H:%M:%S.%f', errors='coerce')
+    df = df.dropna(subset=['time'])
 
     if df.empty:
-        print('No data found')
+        print('No valid data found in file')
+        return
+
+    # Filter by last N hours if requested
+    if args.last_hours:
+        cutoff_time = df['time'].max() - pd.to_timedelta(args.last_hours, unit='h')
+        df = df[df['time'] >= cutoff_time]
+        print(f"Filtering data to last {args.last_hours} hours (from {cutoff_time} onwards)")
+
+    if df.empty:
+        print('No data in the specified time range')
         return
 
     start_time = df['time'].min()
@@ -34,43 +52,48 @@ def main(args):
         names = args.name
 
     # Plot data
+    fig, ax = plt.subplots(figsize=(10, 6))
     for name in names:
         df_name = df[df['name'] == name]
-        plt.plot(df_name['time'], df_name['temp'], label=name)
+        ax.plot(df_name['time'], df_name['temp'], label=name)
 
-    plt.xlabel('Time')
-    plt.ylabel('Temperature (°C)')
-    plt.xlim(start_time, end_time)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Temperature (°C)')
+    ax.set_xlim(start_time, end_time)
 
     # Format title
     start_str = start_time.strftime('%Y-%m-%d %H:%M')
     end_str = end_time.strftime('%Y-%m-%d %H:%M')
-    plt.title(f"Temperature Readings: {start_str} to {end_str}")
+    ax.set_title(f"Temperature Readings: {start_str} to {end_str}")
 
     # Set x-axis ticks
     unique_times = df['time'].unique()
     step = max(1, len(unique_times) // 10)
-    plt.xticks(unique_times[::step])
-
-    # Format x-axis tick labels to full datetime
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
+    ax.set_xticks(unique_times[::step])
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
     plt.xticks(rotation=25)
 
-    plt.grid(True)
-    plt.legend()
+    ax.grid(True)
+    ax.legend()
+
+    plt.tight_layout()
 
     if args.output:
-        # Save plot
-        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        directory = os.path.dirname(args.output)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         plt.savefig(args.output)
         print(f"Plot saved to {args.output}")
     else:
         plt.show()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--filename', type=str, default='data/temps.csv', help='Path to the CSV file')
     parser.add_argument('--output', type=str, default=None, help='Path to save the plot (optional)')
     parser.add_argument('--name', type=str, nargs='+', default=None, help='List of sensor names to plot (default: all)')
+    parser.add_argument('--last-hours', type=float, default=None, help='Plot only data from the last N hours')
     args = parser.parse_args()
+
     main(args)
