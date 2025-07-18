@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -24,12 +24,26 @@ def main(args):
     if df.empty:
         print('No valid data found in file')
         return
+    
+    if args.last_hours and (args.from_time or args.to_time):
+        print('Cannot use --last-hours with --from or --to')
+        return
 
     # Filter by last N hours if requested
     if args.last_hours:
         cutoff_time = df['time'].max() - pd.to_timedelta(args.last_hours, unit='h')
         df = df[df['time'] >= cutoff_time]
         print(f"Filtering data to last {args.last_hours} hours (from {cutoff_time} onwards)")
+
+    if args.from_time:
+        from_time = pd.to_datetime(args.from_time, format='%Y-%m-%d %H:%M:%S')
+        df = df[df['time'] >= from_time]
+        print(f"Filtering data from {from_time}")
+
+    if args.to_time:
+        to_time = pd.to_datetime(args.to_time, format='%Y-%m-%d %H:%M:%S')
+        df = df[df['time'] <= to_time]
+        print(f"Filtering data to {to_time}")
 
     if df.empty:
         print('No data in the specified time range')
@@ -94,6 +108,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default=None, help='Path to save the plot (optional)')
     parser.add_argument('--name', type=str, nargs='+', default=None, help='List of sensor names to plot (default: all)')
     parser.add_argument('--last-hours', type=float, default=None, help='Plot only data from the last N hours')
+    parser.add_argument('--from_time', type=str, default=None, help='Start time (YYYY-MM-DD HH:MM)')
+    parser.add_argument('--to_time', type=str, default=None, help='End time (YYYY-MM-DD HH:MM)')
     args = parser.parse_args()
 
     main(args)
